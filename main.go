@@ -1,13 +1,30 @@
 package main
 
-import "github.com/gin-gonic/gin"
+import (
+	"context"
+
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
+	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
+	"github.com/gin-gonic/gin"
+)
 
 type user struct {
 	Name string `json:"name"`
 	Age  int    `json:"age"`
 }
 
-func main() {
+var ginLambda *ginadapter.GinLambda
+
+func lambdaHandler(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	if ginLambda == nil {
+		ginLambda = ginadapter.New(ginEngine())
+	}
+
+	return ginLambda.ProxyWithContext(ctx, req)
+}
+
+func ginEngine() *gin.Engine {
 	app := gin.Default()
 
 	app.GET("/hello", func(c *gin.Context) {
@@ -26,5 +43,14 @@ func main() {
 		c.JSON(200, u)
 	})
 
-	app.Run(":3000")
+	return app
+}
+
+func main() {
+	if gin.Mode() == "release" {
+		lambda.Start(lambdaHandler)
+	} else {
+		app := ginEngine()
+		app.Run(":3000")
+	}
 }
